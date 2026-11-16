@@ -10,6 +10,7 @@ import {
 import type { LoadContext, OnLoadResult } from "./index.js";
 import process from "node:process";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const textDecoder = new TextDecoder();
@@ -53,8 +54,25 @@ export default function denoPlugin(
       root = path.normalize(config.root);
     },
     async resolveId(id, importer) {
-      // The "pre"-resolve plugin already resolved it
-      if (isDenoSpecifier(id)) return;
+      // Vite plugins own their virtual modules (e.g. `virtual:astro:*`).
+      // The Deno loader only understands its own URL schemes and throws before
+      // later Vite resolvers have a chance to claim unknown scheme IDs.
+      const scheme = /^[a-z][a-z0-9+.-]*:/i.exec(id)?.[0].slice(0, -1)
+        .toLowerCase();
+      if (
+        isDenoSpecifier(id) || id.startsWith("\0") ||
+        (scheme !== undefined &&
+          !["blob", "data", "file", "http", "https", "jsr", "npm", "node"]
+            .includes(scheme))
+      ) return;
+
+      // A missing absolute path may be an optional module probe from another
+      // plugin. Claiming it prevents that plugin from installing its fallback.
+      // Leave extension resolution for existing sibling files to Vite.
+      if (
+        path.isAbsolute(id) && !isDenoSpecifier(importer ?? "") &&
+        !existsSync(id.split("?")[0])
+      ) return;
 
       // @ts-ignore Vite 7+ Environment API
       const envName: string | undefined = this.environment?.name;

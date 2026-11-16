@@ -93,4 +93,18 @@ describe("Deno plugin", () => {
   it("resolves a member's own scoped import map", async () => {
     await runTest(`linking.js`);
   });
+
+  describe("virtual modules owned by other Vite plugins", () => {
+    it("leaves virtual: modules for a later resolver", async () => {
+      await runTest("virtualModule.js");
+    });
+
+    it("leaves framework-private schemes for a later resolver", async () => {
+      await runTest("privateSchemeModule.js");
+    });
+
+    it("does not claim absent absolute files used by other plugins", async () => {
+      await runTest("optionalVirtualModule.js");
+    });
+  });
 });
